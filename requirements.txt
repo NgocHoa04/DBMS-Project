@@ -1,0 +1,8 @@
+matplotlib
+pandas
+mysql-connector-python
+numpy
+sqlalchemy
+reportlab
+openpyxl
+scikit-sklearn
