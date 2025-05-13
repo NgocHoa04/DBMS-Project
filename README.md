@@ -1,1 +1,2 @@
 # DBMS-Project
+# Generate scorecards
