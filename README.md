@@ -43,6 +43,3 @@
 - Input: term, year
 - Output: df --> graph
 - View: bảng money --> khi chọn graph --> hiển thị graph (biểu đồ tròn: có debt, paid)
-
-
->>>>>>> 2ad6cdb74e66f7dbb7515354083be639edaef38f
