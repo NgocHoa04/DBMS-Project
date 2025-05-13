@@ -2,26 +2,35 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import openpyxl
 import numpy as np
+import os
+import select
 from db import session, engine
-from sqlalchemy import Table, func
-from reportlab.platypus import SimpleDocTemplate, Table, Paragraph
+from sqlalchemy import Table, func, and_
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, TableStyle, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 from sklearn.linear_model import LinearRegression
-from models import Grades, Students, TimeSlots, Subjects, Teachers, Classes, Classes_Teacher, Class_period, Students_Classes, Schedules, Money, Academic_period
+from models import Grades, Students, Subjects, Teachers, Classes, Classes_Teacher, Class_period, Students_Classes, Schedules, Money, Academic_period
 
-def generate_scorecard(student_id: int, term: int = None, year: int = None, output_pdf: str = f"scorecards/scorecard.pdf"):
+def generate_scorecard(student_id: int, term: int = None, year: int = None):
     q = session.query(
         Grades.c.GradeID,
         Grades.c.StudentID,
         Students.c.StudentName.label('Student Name'),
-        Subjects.c.SubjectName.label('Subject name'),
+        Subjects.c.SubjectName.label('Subject Name'),
         Grades.c.Score,
+        Grades.c.Weight,
+        Classes.c.ClassName.label('Class Name'),
         Academic_period.c.Term.label('Term'),
         Academic_period.c.Year.label('Year')
     ).join(Students, Students.c.StudentID == Grades.c.StudentID
     ).join(Subjects, Subjects.c.SubjectID == Grades.c.SubjectID
     ).join(Academic_period, Academic_period.c.PerId == Grades.c.PerId
+    ).join(Students_Classes, Students_Classes.c.StudentID == Students.c.StudentID
+    ).join(Classes, Classes.c.ClassID == Students_Classes.c.id
     ).filter(Grades.c.StudentID == student_id)
+
 
     if term is not None:
         q = q.filter(Academic_period.c.Term == term)
@@ -37,26 +46,50 @@ def generate_scorecard(student_id: int, term: int = None, year: int = None, outp
     if df.empty:
         print(f"No data found for student {student_id} in the term {term} of the {year}.")
         return f"No data found for student {student_id} in the term {term} of the {year}."
-    # print(df)
+    # df = df.set_index('GradeID')
+    
 
     df['Weighted Score'] = df['Score'] * df['Weight']
     overall_score = df['Weighted Score'].sum() / df['Weight'].sum()
     print(f"Overall Score: {overall_score}")
 
-    doc = SimpleDocTemplate(output_pdf)
+
+    output_pdf = f"scorecards/scorecard_{student_id}.pdf"
+    os.makedirs("scorecards", exist_ok=True)
+
+    doc = SimpleDocTemplate(output_pdf, pagesize = A4)
     styles = getSampleStyleSheet()
-    title = f"Scorecard: Student #{student_id}"
+    title = f"Scorecard: Student {student_id} - {df['Student Name'].iloc[0]}"
     if term or year:
         title += f"  ({term or ''} / {year or ''})"
     elems = [Paragraph(title, styles['Title'])]
 
-    table_data = [["Subject", "Score"]]
-    for _, row in df.iterrows():
-        table_data.append([row.SubjectName, row.Score])
-    elems.append(Table(table_data))
+    elems.append(Paragraph(f"<b>CLASS:</b> {df['Class Name'].iloc[0]}", styles['Normal']))
+
+    df = df.drop(columns=["Weight"])
+    df = df.drop(columns=["Weighted Score"])
+    df = df.drop(columns=["Student Name", 'GradeID', 'StudentID'])
+    df_pdf = df.drop(columns=["Class Name"])
+    table_data = [df_pdf.columns.tolist()] + df_pdf.values.tolist()
+
+    t = Table(table_data)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    elems.append(t)
+    elems.append(Spacer(1, 12))
     elems.append(Paragraph(f"<b>GPA:</b> {overall_score:.2f}", styles['Normal']))
 
     doc.build(elems)
+    # print(df)
+    return df
 
 def generate_class_performances(class_per_id: int, term: int = None, year: int = None,
                                output_png: str = "class_perf.png"):
@@ -140,7 +173,6 @@ def plot_score_trend(student_id: int,
                       current_year: int,
                       subject_id: int = None,
                       output_png: str = "trend.png"):
-    # Truy vấn điểm và kỳ học
     q = session.query(
         Grades.c.Score,
         Academic_period.c.Term,
@@ -203,7 +235,7 @@ def plot_score_trend(student_id: int,
     plt.close()
 
 if __name__ == "__main__":
-    # generate_scorecard(1, 2, 2024, "scorecard.pdf")
+    generate_scorecard(1)
     # generate_class_performances(1, 1, 2024, "class_perf.png")
     # generate_teacher_load(2, 1, 2024, "teacher_load.xlsx")
-    plot_score_trend(1, 1, 2024, subject_id=1, output_png="trend.png")
+    # plot_score_trend(1, 1, 2024, subject_id=1, output_png="trend.png")
