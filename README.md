@@ -19,4 +19,24 @@
 - Output: df --> table in interface
 - View: cho phép nhập vào input. Khi chưa nhập thì màn hình hiển thị tất cả Student của trường
 
-## 
+## View schedule for princple
+- Input:
+- Output:
+- View:
+
+## View teacher load summaries
+- Input:
+- Output:
+- View:
+
+## View Class performance
+- Input:
+- Output:
+- View:
+
+## View Money(graphic)
+- Input:
+- Output:
+- View:
+
+
