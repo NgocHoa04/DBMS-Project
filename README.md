@@ -48,3 +48,8 @@
 - Input: term, year
 - Output: df --> graph
 - View: bảng money --> khi chọn graph --> hiển thị graph (biểu đồ tròn: có debt, paid)
+
+## View trend average score of one class
+- Input: className, current_term, curent_year
+- Output: df --> graph
+- View: cho phép nhập vào input. Khi chưa nhập vào input màn hình hiển thị điểm average score của ( tất cả các kì??? kì hiện tại???)
