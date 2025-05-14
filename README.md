@@ -34,10 +34,10 @@
 - Output: df --> Graph in interface
 - View: cho phép nhập vào input. Khi chưa nhập, màn hình hiển thị điểm trung bình từng môn của từng lớp. Khi nhập, lọc dữ liệu --> chọn nút tạo graph để hiển thị graph 
 
-## View class performance per khối ( ví dụ: khối 10, 11, 12)
-- Input: khối, term, year
-- Output: df --> graph 
-- View: chưa biết để view như nào cho hợp lý vì có nhiều trường một khối có rất nhiều lớp --> graph: rối, khó quan sát
+## View class performance per each class
+- Input: class name, term, year
+- Output: top 10 students in class( overall score), overall score of all students in class 
+- View: cho phép chọn class name, khi chưa chọn class name thì hiển thị thông tin học sinh của toàn trường. Khi chọn class name, term, year --> graph overall score of all student in class, and top 10 students,
 
 ## View Money(graphic)
 - Input: term, year
