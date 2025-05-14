@@ -29,10 +29,11 @@
 - Output:df --> table in interface
 - View: Danh sách toàn bộ giáo viên trong trường ( khi lọc term, year --> hiển thị theo term, year), cho phép tải xuống file excel.
 
-## View Class performance per subject
-- Input: SubjectID, term, year
+## View Class performance per class and subject
+- Input: ClassName, term, year
 - Output: df --> Graph in interface
-- View: cho phép nhập vào input. Khi chưa nhập, màn hình hiển thị điểm trung bình từng môn của từng lớp. Khi nhập, lọc dữ liệu --> chọn nút tạo graph để hiển thị graph 
+- View: cho phép nhập vào input. Khi nhập, lọc dữ liệu --> chọn nút tạo graph để hiển thị graph ( mỗi hình tròn là một subject: score/100)
+
 
 ## View class performance 
 - Input: class name, term, year
