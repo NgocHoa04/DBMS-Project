@@ -6,3 +6,4 @@ sqlalchemy
 reportlab
 openpyxl
 scikit-sklearn
+load_dotenv

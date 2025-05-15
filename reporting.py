@@ -51,7 +51,7 @@ def generate_scorecard(student_id: int, term: int = None, year: int = None):
 
     df['Weighted Score'] = df['Score'] * df['Weight']
     overall_score = df['Weighted Score'].sum() / df['Weight'].sum()
-    print(f"Overall Score: {overall_score}")
+    # print(f"Overall Score: {overall_score}")
 
 
     output_pdf = f"scorecards/scorecard_{student_id}.pdf"
@@ -91,31 +91,93 @@ def generate_scorecard(student_id: int, term: int = None, year: int = None):
     # print(df)
     return df
 
-def generate_class_performances(class_per_id: int, term: int = None, year: int = None,
-                               output_png: str = "class_perf.png"):
-    
+def generate_class_performances_per_each_class(class_name: str, term: int = None, year: int = None):
     class_info = session.query(
         Classes.c.ClassName,
         Academic_period.c.Term,
         Academic_period.c.Year
     ).join(Class_period, Class_period.c.ClassID == Classes.c.ClassID
     ).join(Academic_period, Class_period.c.PerID == Academic_period.c.PerId
-    ).filter(Class_period.c.id == class_per_id,
-             Academic_period.c.Term == term,
-             Academic_period.c.Year == year
+    ).filter(
+        Classes.c.ClassName == class_name,
+        Academic_period.c.Term == term,
+        Academic_period.c.Year == year
     ).first()
 
     if not class_info:
-        raise ValueError("No class or academic period matches the given class_period_id, term, and year.")
-
-    class_name, term_val, year_val = class_info
+        raise ValueError(f"No class or academic period matches {class_name} - Term {term}, Year {year}.")
 
     q = session.query(
+        Students.c.StudentID,
+        Students.c.StudentName,
         Subjects.c.SubjectName,
         Grades.c.Score,
-    ).join(Grades, Subjects.c.SubjectID == Grades.c.SubjectID
-    ).join(Class_period, Grades.c.PerId == Class_period.c.PerID
-    ).filter(Class_period.c.id == class_per_id)
+        Grades.c.Weight,
+        Classes.c.ClassName,
+        Academic_period.c.Term,
+        Academic_period.c.Year
+    ).join(Grades, Grades.c.StudentID == Students.c.StudentID
+    ).join(Subjects, Subjects.c.SubjectID == Grades.c.SubjectID
+    ).join(Students_Classes, Students_Classes.c.StudentID == Students.c.StudentID
+    ).join(Class_period, Class_period.c.id == Students_Classes.c.Class_perID
+    ).join(Classes, Classes.c.ClassID == Class_period.c.ClassID
+    ).join(Academic_period, Academic_period.c.PerId == Class_period.c.PerID
+    ).filter(
+        Classes.c.ClassName == class_name,
+        Academic_period.c.Term == term,
+        Academic_period.c.Year == year
+    )
+
+    df = pd.read_sql(q.statement, engine)
+
+    if df.empty:
+        raise ValueError("No grade data available for the selected class period.")
+
+    df['Weighted Score'] = df['Score'] * df['Weight']
+    total_weight = df['Weight'].sum()
+    if total_weight == 0:
+        overall_score = 0
+    else:
+        overall_score = df['Weighted Score'].sum() / total_weight
+
+    df['Class Average Score'] = overall_score
+
+    df = df.drop(columns=["Weight", "Weighted Score", "StudentID", "SubjectName", "Score", "StudentName"])
+    df = df.drop_duplicates()
+    print(df)
+
+    return df
+
+def top_students_per_class(class_name: str, term: int, year: int, top_n: int):
+    class_info = session.query(
+        Classes.c.ClassName,
+        Academic_period.c.Term,
+        Academic_period.c.Year
+    ).join(Class_period, Class_period.c.ClassID == Classes.c.ClassID
+    ).join(Academic_period, Class_period.c.PerID == Academic_period.c.PerId
+    ).filter(
+        Classes.c.ClassName == class_name,
+        Academic_period.c.Term == term,
+        Academic_period.c.Year == year
+    ).first()
+
+    if not class_info:
+        raise ValueError(f"No class or academic period matches {class_name} - Term {term}, Year {year}.")
+
+    q = session.query(
+        Students.c.StudentID,
+        Students.c.StudentName,
+        func.round(func.avg(Grades.c.Score), 2).label('Average Score')
+    ).join(Grades, Grades.c.StudentID == Students.c.StudentID
+    ).join(Students_Classes, Students_Classes.c.StudentID == Students.c.StudentID
+    ).join(Class_period, Class_period.c.id == Students_Classes.c.Class_perID
+    ).join(Classes, Classes.c.ClassID == Class_period.c.ClassID
+    ).join(Academic_period, Academic_period.c.PerId == Class_period.c.PerID
+    ).filter(
+        Classes.c.ClassName == class_name,
+        Academic_period.c.Term == term,
+        Academic_period.c.Year == year
+    ).group_by(Students.c.StudentID, Students.c.StudentName).order_by(func.avg(Grades.c.Score).desc()).limit(top_n)
 
     df = pd.read_sql(q.statement, engine)
     session.close()
@@ -123,19 +185,44 @@ def generate_class_performances(class_per_id: int, term: int = None, year: int =
     if df.empty:
         raise ValueError("No grade data available for the selected class period.")
 
-    avg = df.groupby('SubjectName')['Score'].mean().sort_values()
+    print(df)
+    return df
 
-    plt.figure()
-    avg.plot(kind='bar', color='skyblue')
-    plt.title(f"Performance of Class {class_name} - Term {term_val}, {year_val}")
-    plt.ylabel("Average Score")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(output_png)
-    # plt.show()
-    plt.close()
+def generate_class_average_per_subjects(class_name: str, term: int, year: int):
+    q = session.query(
+        Classes.c.ClassName.label('Class Name'),
+        Subjects.c.SubjectName.label('Subject Name'),
+        (func.sum(Grades.c.Score * Grades.c.Weight) / func.sum(Grades.c.Weight)).label('AverageScore')
+    ).join(Class_period, Class_period.c.ClassID == Classes.c.ClassID
+    ).join(Students_Classes, Students_Classes.c.Class_perID == Class_period.c.id
+    ).join(Students, Students.c.StudentID == Students_Classes.c.StudentID
+    ).join(Grades, and_(
+        Grades.c.StudentID == Students.c.StudentID,
+        Grades.c.PerId == Class_period.c.PerID
+    )).join(Subjects, Subjects.c.SubjectID == Grades.c.SubjectID
+    ).join(Academic_period, Academic_period.c.PerId == Class_period.c.PerID
+    ).filter(
+        Classes.c.ClassName == class_name,
+        Academic_period.c.Term == term,
+        Academic_period.c.Year == year
+    ).group_by(
+        Classes.c.ClassName,
+        Subjects.c.SubjectName
+    ).order_by(
+        Classes.c.ClassName,
+        Subjects.c.SubjectName
+    )
 
-def generate_teacher_load(teacher_id : int, term: int, year: int, output_excel: str = "teacher_load.xlsx"):
+    df = pd.read_sql(q.statement, engine)
+
+    if df.empty:
+        raise ValueError("No grade data available for the specified term and year.")
+
+    df = df.drop(columns= ['Class Name'])
+    print(df)
+    return df
+
+def generate_teacher_load(term: int, year: int):
     academic_period = session.query(Academic_period.c.PerId
                         ).filter_by(Term=term, Year=year
                         ).first()
@@ -157,85 +244,27 @@ def generate_teacher_load(teacher_id : int, term: int, year: int, output_excel: 
     ).join(Students_Classes,
            Class_period.c.id == Students_Classes.c.Class_perID
     ).filter(Class_period.c.PerID == per_id,
-             Teachers.c.TeacherID == teacher_id
     ).group_by(Teachers.c.TeacherID, Teachers.c.TeacherName)
 
     df = pd.read_sql(q.statement, engine)
     session.close()
 
+    output_excel: str = "teacher_load.xlsx"
+
     if df.empty:
         raise ValueError("No data found for the selected term and year.")
-    print(df)
-    df.to_excel(output_excel, index=False)
-
-def plot_score_trend(student_id: int,
-                      current_term: int,
-                      current_year: int,
-                      subject_id: int = None,
-                      output_png: str = "trend.png"):
-    q = session.query(
-        Grades.c.Score,
-        Academic_period.c.Term,
-        Academic_period.c.Year
-    ).join(Academic_period,
-           Grades.c.PerId == Academic_period.c.PerId
-    ).filter(Grades.c.StudentID == student_id)
-
-    if subject_id:
-        q = q.filter(Grades.c.SubjectID == subject_id)
-
-    df = pd.read_sql(q.statement, engine)
-    session.close()
-
-    if df.empty:
-        raise ValueError("No grade data available for the selected student.")
-
-    term_map = {1: 0.0, 2: 0.33, 3: 0.66}
-    reverse_term_map = {0.0: 1, 0.33: 2, 0.66: 3}
-
-    df['TimeNum'] = df['Year'] + df['Term'].map(term_map)
-    df = df.sort_values('TimeNum')
-
-    if len(df) < 4:
-        raise ValueError("Need at least 4 academic terms to make a prediction.")
     
-    X = df[['TimeNum']]
-    y = df['Score']
-    model = LinearRegression().fit(X, y)
-
-    y_pred = model.predict(X)
-
-    future_terms = []
-    for _ in range(4):
-        if current_term == 3:
-            current_term = 1
-            current_year += 1
-        else:
-            current_term += 1
-        time_num = current_year + term_map[current_term]
-        future_terms.append((time_num, current_term, current_year))
-
-    future_time_nums = np.array([[t[0]] for t in future_terms])
-    future_scores = model.predict(future_time_nums)
-
-    plt.figure()
-    plt.plot(df['TimeNum'], df['Score'], marker='o', label='Actual', color='blue')
-    plt.plot(df['TimeNum'], y_pred, linestyle='--', label='Trend', color='orange')
-    for (t, term, year), score in zip(future_terms, future_scores):
-        plt.scatter([t], [score], color='red')
-        plt.text(t, score + 0.3, f"{round(score,1)}\n(T{term}-{year})", ha='center', fontsize=8)
-
-    plt.title(f"Score Trend for Student #{student_id}")
-    plt.xlabel("Time (Year.Term)")
-    plt.ylabel("Score")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(output_png)
-    plt.show()
-    plt.close()
+    df.to_excel(output_excel, index=False)
+    print(df)
+    return df
+#################################################################################################################
 
 if __name__ == "__main__":
-    generate_scorecard(1)
-    # generate_class_performances(1, 1, 2024, "class_perf.png")
+    # generate_scorecard(1)
+    # generate_class_performances_per_each_class('Grade 1', 1, 2024)
+    # top_students_per_class('Grade 3', 2, 2024, 3)
+    # generate_class_performance_per_subject('Art', 2, 2024)
+    # generate_class_average_per_subjects('Grade 1', 1, 2024)
+    # generate_teacher_load(1, 2024)
     # generate_teacher_load(2, 1, 2024, "teacher_load.xlsx")
     # plot_score_trend(1, 1, 2024, subject_id=1, output_png="trend.png")
