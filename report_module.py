@@ -117,7 +117,7 @@ def generate_class_average_score(class_name: str, term: int, year: int):
         "AverageScore": "Average Score"
     })
 
-    print(df)
+    # print(df)
     return df
 
 def top_students_per_class(class_name: str, term: int, year: int, top_n: int):
@@ -156,10 +156,75 @@ def top_students_per_class(class_name: str, term: int, year: int, top_n: int):
     # print(df)
     return df
 
+def generate_class_average_per_subjects(class_name: str, term: int, year: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_class_average_per_subject", [class_name, term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        msg = f"No grade data available for class '{class_name}' in term {term} of year {year}."
+        print(msg)
+        return msg
+
+    df = pd.DataFrame(results)
+    df = df.rename(columns={
+        "ClassName": "Class Name",
+        "Term": "Term",
+        "Year": "Year",
+        "SubjectName": "Subject Name",
+        "SubjectAvg": "Average Score"
+    })
+
+    # print(df)
+    return df
+
+# Student Address
+def get_student_locations(term: int, year: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_get_student_locations_by_period", [term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        msg = "No student location data found."
+        return msg
+
+    df = pd.DataFrame(results)
+    df = df.rename(columns={
+        "StudentID": "StudentID",
+        "StudentName": "Student Name",
+    })
+
+    # print(df)
+    return df
 
 
 if __name__ == "__main__":
     # scorecard = generate_scorecard(1, 1, 2024)
     # print(scorecard)
     # generate_class_average_score("Grade 1", 1, 2024)
-    top_students_per_class("Grade 1", 1, 2024, 5)
+    # top_students_per_class("Grade 1", 1, 2024, 5)4
+    # generate_class_average_per_subjects("Grade 1", 1, 2024)
+    get_student_locations(1, 2024)

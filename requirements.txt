@@ -7,3 +7,5 @@ reportlab
 openpyxl
 scikit-sklearn
 load_dotenv
+requests
+geopy
