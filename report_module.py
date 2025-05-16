@@ -5,7 +5,7 @@ import numpy as np
 import os
 import select
 from db import session, engine
-from sqlalchemy import Table, func, and_
+from sqlalchemy import Table, func, and_, MetaData
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, TableStyle, Spacer
@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from models import Grades, Students, Subjects, Teachers, Classes, Classes_Teacher, Class_period, Students_Classes, Schedules, Money, Academic_period
 from sqlalchemy import text
 
-
+# CLASS MANAGEMENT
 def generate_scorecard(student_id: int, term: int = None, year: int = None):
     conn = engine.raw_connection()
     try:
@@ -88,9 +88,42 @@ def generate_scorecard(student_id: int, term: int = None, year: int = None):
 
     return df2.iloc[0], df3.iloc[0], df, float(overall_score)
 
+def generate_class_average_score(class_name: str, term: int = None, year: int = None):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_get_class_average_score", [class_name, term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        msg = f"No data found for class '{class_name}' in term {term} of year {year}."
+        return msg
+
+    df = pd.DataFrame(results)
+    df = df.rename(columns={
+        "ClassName": "Class Name",
+        "Term": "Term",
+        "Year": "Year",
+        "AverageScore": "Average Score"
+    })
+
+    print(df)
+    return df
+
+
+
+
 if __name__ == "__main__":
-    student_id = 1
-    term = 1
-    year = 2024
-    scorecard = generate_scorecard(student_id, term, year)
-    print(scorecard)
+    # scorecard = generate_scorecard(1, 1, 2024)
+    # print(scorecard)
+    generate_class_average_score("Grade 1", 1, 2024)
