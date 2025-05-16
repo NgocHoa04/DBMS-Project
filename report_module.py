@@ -88,7 +88,7 @@ def generate_scorecard(student_id: int, term: int = None, year: int = None):
 
     return df2.iloc[0], df3.iloc[0], df, float(overall_score)
 
-def generate_class_average_score(class_name: str, term: int = None, year: int = None):
+def generate_class_average_score(class_name: str, term: int, year: int):
     conn = engine.raw_connection()
     try:
         cursor = conn.cursor()
@@ -120,10 +120,46 @@ def generate_class_average_score(class_name: str, term: int = None, year: int = 
     print(df)
     return df
 
+def top_students_per_class(class_name: str, term: int, year: int, top_n: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_class_summary", [class_name, term, year, top_n])
+
+        results = []
+        result_sets = cursor.stored_results()
+
+        class_gpa_result = next(result_sets)
+        class_gpa_row = class_gpa_result.fetchone()
+        class_gpa = class_gpa_row[0] if class_gpa_row else None
+
+        top_students_result = next(result_sets)
+        rows = top_students_result.fetchall()
+        col_names = top_students_result.column_names
+        top_students = [dict(zip(col_names, row)) for row in rows]
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not top_students:
+        raise ValueError(f"No data found for class {class_name} in Term {term}, Year {year}.")
+
+    df = pd.DataFrame(top_students)
+    df = df.rename(columns={
+        "StudentName": "Student Name",
+        "ClassName": "Class Name",
+        "Term": "Term",
+        "Year": "Year",
+        "AvgScore": "Average Score"
+    })
+    # print(df)
+    return df
 
 
 
 if __name__ == "__main__":
     # scorecard = generate_scorecard(1, 1, 2024)
     # print(scorecard)
-    generate_class_average_score("Grade 1", 1, 2024)
+    # generate_class_average_score("Grade 1", 1, 2024)
+    top_students_per_class("Grade 1", 1, 2024, 5)
