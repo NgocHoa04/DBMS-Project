@@ -220,6 +220,42 @@ def get_student_locations(term: int, year: int):
     # print(df)
     return df
 
+def generate_teacher_load(term: int, year: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_teacher_load", [term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        msg = f"No data found for term {term} and year {year}."
+        return msg
+
+    df = pd.DataFrame(results)
+    df = df.drop(columns= ["NumStudents"])
+    df = df.rename(columns={
+        "TeacherID": "Teacher ID",
+        "TeacherName": "Teacher Name",
+        "SubjectName": "Subject Name",
+        "NumClasses": "Number of Classes",
+    })
+
+    output_excel = "teacher_load.xlsx"
+    df.to_excel(output_excel, index=False)
+
+    print(df)
+    return df
+
 
 if __name__ == "__main__":
     # scorecard = generate_scorecard(1, 1, 2024)
@@ -227,4 +263,5 @@ if __name__ == "__main__":
     # generate_class_average_score("Grade 1", 1, 2024)
     # top_students_per_class("Grade 1", 1, 2024, 5)4
     # generate_class_average_per_subjects("Grade 1", 1, 2024)
-    get_student_locations(1, 2024)
+    # get_student_locations(1, 2024)
+    generate_teacher_load(1, 2024)
