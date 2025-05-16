@@ -1,0 +1,96 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import openpyxl
+import numpy as np
+import os
+import select
+from db import session, engine
+from sqlalchemy import Table, func, and_
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, TableStyle, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from models import Grades, Students, Subjects, Teachers, Classes, Classes_Teacher, Class_period, Students_Classes, Schedules, Money, Academic_period
+from sqlalchemy import text
+
+
+def generate_scorecard(student_id: int, term: int = None, year: int = None):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_get_scorecard", [student_id, term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        print(f"No data found for student {student_id} in the term {term} of the {year}.")
+        return f"No data found for student {student_id} in the term {term} of the {year}."
+
+
+
+    df = pd.DataFrame(results)
+    # print(df.columns)
+    df = df.rename(columns={"StudentName": "Student Name", "ClassName": "Class Name", "SubjectName": "Subject Name", "TeacherName": "Teacher Name"})
+    # print(df.columns)
+    df['Weighted Score'] = df['Score'] * df['Weight']
+    overall_score = df['Weighted Score'].sum() / df['Weight'].sum()
+
+    output_pdf = f"scorecards/scorecard_{student_id}.pdf"
+    os.makedirs("scorecards", exist_ok=True)
+
+    doc = SimpleDocTemplate(output_pdf, pagesize=A4)
+    styles = getSampleStyleSheet()
+    title = f"Scorecard: Student {student_id} - {df['Student Name'].iloc[0]}"
+    if term or year:
+        title += f"  ({term or ''} / {year or ''})"
+    elems = [Paragraph(title, styles['Title'])]
+
+    elems.append(Paragraph(f"<b>CLASS:</b> {df['Class Name'].iloc[0]}", styles['Normal']))
+
+    df = df.drop(columns=["Weight"])
+    df = df.drop(columns=["Weighted Score"])
+    df3 = df["Student Name"]
+    df3 = df3.drop_duplicates()
+    df = df.drop(columns=["Student Name", 'StudentID'])
+    df_pdf = df.drop(columns=["Class Name"])
+    df2 = df["Class Name"]
+    df2 = df2.drop_duplicates()
+    df = df.drop(columns=["Class Name"])
+    table_data = [df_pdf.columns.tolist()] + df_pdf.values.tolist()
+
+
+    # print(df)
+    t = Table(table_data)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+    ]))
+
+    elems.append(t)
+    elems.append(Spacer(1, 12))
+    elems.append(Paragraph(f"<b>GPA:</b> {overall_score:.2f}", styles['Normal']))
+
+    doc.build(elems)
+
+    return df2.iloc[0], df3.iloc[0], df, float(overall_score)
+
+if __name__ == "__main__":
+    student_id = 1
+    term = 1
+    year = 2024
+    scorecard = generate_scorecard(student_id, term, year)
+    print(scorecard)

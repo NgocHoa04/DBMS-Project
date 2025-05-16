@@ -10,8 +10,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, TableStyle, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from sklearn.linear_model import LinearRegression
 from models import Grades, Students, Subjects, Teachers, Classes, Classes_Teacher, Class_period, Students_Classes, Schedules, Money, Academic_period
+
 
 def generate_scorecard(student_id: int, term: int = None, year: int = None):
     q = session.query(
@@ -260,7 +260,7 @@ def generate_teacher_load(term: int, year: int):
 #################################################################################################################
 
 if __name__ == "__main__":
-    # generate_scorecard(1)
+    generate_scorecard(1)
     # generate_class_performances_per_each_class('Grade 1', 1, 2024)
     # top_students_per_class('Grade 3', 2, 2024, 3)
     # generate_class_performance_per_subject('Art', 2, 2024)
