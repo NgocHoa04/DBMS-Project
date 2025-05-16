@@ -190,36 +190,6 @@ def generate_class_average_per_subjects(class_name: str, term: int, year: int):
     # print(df)
     return df
 
-# Student Address
-def get_student_locations(term: int, year: int):
-    conn = engine.raw_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.callproc("sp_get_student_locations_by_period", [term, year])
-
-        results = []
-        for result in cursor.stored_results():
-            rows = result.fetchall()
-            col_names = result.column_names
-            for row in rows:
-                results.append(dict(zip(col_names, row)))
-    finally:
-        cursor.close()
-        conn.close()
-
-    if not results:
-        msg = "No student location data found."
-        return msg
-
-    df = pd.DataFrame(results)
-    df = df.rename(columns={
-        "StudentID": "StudentID",
-        "StudentName": "Student Name",
-    })
-
-    # print(df)
-    return df
-
 def generate_teacher_load(term: int, year: int):
     conn = engine.raw_connection()
     try:
@@ -253,6 +223,93 @@ def generate_teacher_load(term: int, year: int):
     output_excel = "teacher_load.xlsx"
     df.to_excel(output_excel, index=False)
 
+    # print(df)
+    return df
+
+# GENERAL MANAGEMENT
+# Student Address
+def get_student_locations(term: int, year: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_get_student_locations_by_period", [term, year])
+
+        results = []
+        for result in cursor.stored_results():
+            rows = result.fetchall()
+            col_names = result.column_names
+            for row in rows:
+                results.append(dict(zip(col_names, row)))
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not results:
+        msg = "No student location data found."
+        return msg
+
+    df = pd.DataFrame(results)
+    df = df.rename(columns={
+        "StudentID": "StudentID",
+        "StudentName": "Student Name",
+    })
+
+    # print(df)
+    return df
+
+def top_students_overall(term: int, year: int, top_n: int):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_top_students_overall", [term, year, top_n])
+
+        result_sets = cursor.stored_results()
+        top_students_result = next(result_sets)
+        rows = top_students_result.fetchall()
+        col_names = top_students_result.column_names
+        top_students = [dict(zip(col_names, row)) for row in rows]
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not top_students:
+        raise ValueError(f"No data found for Term {term}, Year {year}.")
+
+    df = pd.DataFrame(top_students)
+    df = df.rename(columns={
+        "StudentName": "Student Name",
+        "ClassName": "Class Name",
+        "AverageScore": "Average Score"
+    })
+    print(df)
+    return df
+
+def top_students_per_subject(term: int, year: int, top_n: int, subject_name: str = None):
+    conn = engine.raw_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.callproc("sp_top_students_per_subject", [term, year, top_n, subject_name])
+
+        result_sets = cursor.stored_results()
+        result = next(result_sets)
+        rows = result.fetchall()
+        col_names = result.column_names
+        students = [dict(zip(col_names, row)) for row in rows]
+
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not students:
+        raise ValueError(f"No data found for Term {term}, Year {year}, Subject {subject_name}.")
+
+    df = pd.DataFrame(students)
+    df = df.rename(columns={
+        "SubjectName": "Subject",
+        "StudentName": "Student Name",
+        "AverageScore": "Average Score"
+    })
     print(df)
     return df
 
@@ -264,4 +321,6 @@ if __name__ == "__main__":
     # top_students_per_class("Grade 1", 1, 2024, 5)4
     # generate_class_average_per_subjects("Grade 1", 1, 2024)
     # get_student_locations(1, 2024)
-    generate_teacher_load(1, 2024)
+    # generate_teacher_load(1, 2024)
+    # top_students_overall(1, 2024, 3)
+    top_students_per_subject(1, 2024, 3, 'Math')
