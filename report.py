@@ -39,7 +39,37 @@ class SchoolAnalytics:
 
         self.geolocator = Nominatim(user_agent="my_geocoder", timeout=5)
         self.geocode = RateLimiter(self.geolocator.geocode, min_delay_seconds=1.5, max_retries=3)
-
+    def take_class_name(self):
+        conn = self.engine.raw_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT classname FROM classes")
+            result = cursor.fetchall()
+            return (row[0] for row in result)  # extract only the class names
+        finally:
+            cursor.close()
+            conn.close()
+    def take_term(self):
+        conn = self.engine.raw_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT Term FROM Academic_period")
+            result = cursor.fetchall()
+            return (row[0] for row in result)  # extract only the class names
+        finally:
+            cursor.close()
+            conn.close()
+    def take_year(self):
+        conn = self.engine.raw_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT DISTINCT Year FROM Academic_period")
+            result = cursor.fetchall()
+            return (row[0] for row in result)  # extract only the class names
+        finally:
+            cursor.close()
+            conn.close()
+            
     def generate_scorecard(self, student_id: int, term: int = None, year: int = None):
         conn = self.engine.raw_connection()
         try:
@@ -253,9 +283,9 @@ class SchoolAnalytics:
         try:
             cursor = conn.cursor()
             cursor.callproc("sp_top_students_overall", [term, year, top_n])
-            result_sets = cursor.stored_results()
-            rows = next(result_sets).fetchall()
-            col_names = result_sets.column_names
+            result = next(cursor.stored_results())
+            rows = result.fetchall()
+            col_names = result.column_names
             top_students = [dict(zip(col_names, row)) for row in rows]
         finally:
             cursor.close()
@@ -265,10 +295,11 @@ class SchoolAnalytics:
             raise ValueError(f"No data found for Term {term}, Year {year}.")
 
         return pd.DataFrame(top_students).rename(columns={
-            "StudentName": "Student Name",
-            "ClassName": "Class Name",
-            "AverageScore": "Average Score"
-        })
+        "StudentName": "Student Name",
+        "ClassName": "Class Name",
+        "AverageScore": "Average Score"
+    })
+
 
     def top_students_per_subject(self, term: int, year: int, top_n: int, subject_name: str = None):
         conn = self.engine.raw_connection()
@@ -291,3 +322,4 @@ class SchoolAnalytics:
             "StudentName": "Student Name",
             "AverageScore": "Average Score"
         })
+
